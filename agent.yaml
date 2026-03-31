@@ -1,0 +1,13 @@
+name: social-content-repurposer
+language: typescript
+entrypoint: agent.ts
+browser: false
+run_timeout_minutes: 15
+inputs:
+  - id: content_url
+    label: Content URL
+    type: url
+    required: true
+tools:
+  - twitter
+  - linkedin
