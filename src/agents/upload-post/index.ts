@@ -43,17 +43,9 @@ async function getMediaFromImage(image?: {
 }
 
 export function ensureSignature(text: string): string {
-  const prefix = "LangChain Community Spotlight:";
-
-  let result = text.replace(/\n*Made by the LangChain Community\n*/gi, "\n\n");
-  result = result.replace(/^\n+/, "");
+  let result = text.replace(/^\n+/, "");
   result = result.replace(/\n+$/, "");
   result = result.replace(/\n{3,}/g, "\n\n");
-
-  if (!result.toLowerCase().includes(prefix.toLowerCase())) {
-    result = `${prefix} ${result}`;
-  }
-
   return result;
 }
 

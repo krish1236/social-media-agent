@@ -57,7 +57,7 @@ export const POST_CONTENT_RULES = `- Focus your post on what the content covers,
  * It should be generalized to the type of content you care about, or if using
  * for a business, it should contain details about your products/offerings/business.
  */
-export const BUSINESS_CONTEXT = `
+export const BUSINESS_CONTEXT = process.env.BUSINESS_CONTEXT || `
 Here is some context about the types of content you should be interested in prompting:
 <business-context>
 - AI applications. You care greatly about all new and novel ways people are using AI to solve problems.
