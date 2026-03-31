@@ -6,6 +6,11 @@ import { generatePostGraph } from "./src/agents/generate-post/generate-post-grap
 
 const runtime = new AgentRuntime();
 
+// RunForge production workers do not provide a LangGraph store by default.
+// Force skip flags so graph nodes that read/write used-url store never run.
+process.env.SKIP_USED_URLS_CHECK = "true";
+process.env.SKIP_CONTENT_RELEVANCY_CHECK = "true";
+
 runtime.agent("social-content-repurposer")(async (ctx, input) => {
   const url = String(
     input.content_url ?? ctx.inputs.content_url ?? "",
@@ -19,6 +24,8 @@ runtime.agent("social-content-repurposer")(async (ctx, input) => {
       },
       {
         configurable: {
+          SKIP_USED_URLS_CHECK: true,
+          SKIP_CONTENT_RELEVANCY_CHECK: true,
           skipUsedUrlsCheck: true,
           skipContentRelevancyCheck: true,
           textOnlyMode: true,
