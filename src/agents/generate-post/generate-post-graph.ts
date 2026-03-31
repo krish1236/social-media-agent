@@ -159,6 +159,12 @@ async function routeToCuratedInterruptOrContinue(
   state: GeneratePostState,
   config: LangGraphRunnableConfig,
 ): Promise<"humanNode" | typeof END> {
+  // RunForge worker runs are non-interactive and do not configure LangGraph checkpointers.
+  // Route to END to avoid interrupt/checkpoint flows (humanNode) in production worker mode.
+  if (process.env.RUNFORGE_RUN_ID || process.env.RUN_ID || process.env.AGENT_RUNTIME_ENV === "production") {
+    return END;
+  }
+
   if (config.configurable?.origin === "curate-data") {
     const postToLinkedInOrg = shouldPostToLinkedInOrg(config);
     const client = new Client({
