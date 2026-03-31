@@ -13,9 +13,18 @@ runtime.agent("social-content-repurposer")(async (ctx, input) => {
   if (!url) throw new Error("content_url is required");
 
   await ctx.safeStep("generate", async () => {
-    const result = await generatePostGraph.invoke({
-      links: [url],
-    });
+    const result = await generatePostGraph.invoke(
+      {
+        links: [url],
+      },
+      {
+        configurable: {
+          skipUsedUrlsCheck: true,
+          skipContentRelevancyCheck: true,
+          textOnlyMode: true,
+        },
+      },
+    );
     const post = String(result.post ?? "");
     const report = String(result.report ?? "");
     ctx.state.post = post;
