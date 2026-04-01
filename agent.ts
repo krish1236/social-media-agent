@@ -14,7 +14,6 @@ import { AgentRuntime, ToolsFacade } from "@runforge/sdk";
 import { generatePostGraph } from "./src/agents/generate-post/generate-post-graph.js";
 import { repurposerGraph } from "./src/agents/repurposer/index.js";
 import { generateThreadGraph } from "./src/agents/generate-thread/index.js";
-import { generateReportGraph } from "./src/agents/generate-report/index.js";
 import { supervisorGraph } from "./src/agents/supervisor/supervisor-graph.js";
 
 const runtime = new AgentRuntime();
@@ -92,7 +91,7 @@ class InMemoryStoreShim {
 const storeShim = new InMemoryStoreShim();
 
 // ── Shared graph config ──
-const graphConfig = {
+const baseGraphConfig = {
   configurable: {
     SKIP_USED_URLS_CHECK: true,
     SKIP_CONTENT_RELEVANCY_CHECK: true,
@@ -102,6 +101,19 @@ const graphConfig = {
   },
   store: storeShim as any,
 };
+
+function graphConfigFor(ctx: any, scope: string) {
+  const runId =
+    String(ctx?.run?.id ?? ctx?.runId ?? ctx?.inputs?.run_id ?? "").trim() ||
+    `run_${Date.now()}`;
+  return {
+    ...baseGraphConfig,
+    configurable: {
+      ...baseGraphConfig.configurable,
+      thread_id: `${runId}:${scope}`,
+    },
+  };
+}
 
 // ── Helper: post via RunForge managed tools with approval ──
 async function postToSocials(
@@ -180,7 +192,7 @@ async function postThread(
 // MAIN AGENT
 // ══════════════════════════════════════════════════════
 
-runtime.agent("social-content-repurposer")(async (ctx, input) => {
+runtime.agent("social-content-repurposer")(async (ctx: any, input: any) => {
   const mode = String(
     input.mode ?? ctx.inputs.mode ?? "single_post",
   ).trim();
@@ -207,7 +219,7 @@ runtime.agent("social-content-repurposer")(async (ctx, input) => {
     await ctx.safeStep("generate_post", async () => {
       const result = await generatePostGraph.invoke(
         { links: [url] },
-        graphConfig,
+        graphConfigFor(ctx, "single_post_generate"),
       );
       ctx.state.post = String(result.post ?? "");
       ctx.state.report = String(result.report ?? "");
@@ -235,7 +247,7 @@ runtime.agent("social-content-repurposer")(async (ctx, input) => {
           contextLinks: contextUrls.length > 0 ? contextUrls : undefined,
           quantity: numPosts,
         },
-        graphConfig,
+        graphConfigFor(ctx, "campaign_generate"),
       );
 
       const posts = result.posts ?? [];
@@ -282,7 +294,7 @@ runtime.agent("social-content-repurposer")(async (ctx, input) => {
     await ctx.safeStep("generate_report", async () => {
       const reportResult = await generatePostGraph.invoke(
         { links: [url] },
-        graphConfig,
+        graphConfigFor(ctx, "thread_report"),
       );
       ctx.state.report = String(reportResult.report ?? "");
       await ctx.artifact("report.md", ctx.state.report, "text/markdown");
@@ -294,7 +306,7 @@ runtime.agent("social-content-repurposer")(async (ctx, input) => {
         {
           reports: [ctx.state.report],
         },
-        graphConfig,
+        graphConfigFor(ctx, "thread_generate"),
       );
 
       const threadPosts = threadResult.threadPosts ?? [];
@@ -325,7 +337,10 @@ runtime.agent("social-content-repurposer")(async (ctx, input) => {
   // ── MODE 4: Content Curation (batch scan + generate) ──
   else if (mode === "curate") {
     await ctx.safeStep("curate_and_generate", async () => {
-      const result = await supervisorGraph.invoke({}, graphConfig);
+      const result = await supervisorGraph.invoke(
+        {},
+        graphConfigFor(ctx, "curate_generate"),
+      );
 
       // Supervisor produces grouped reports + generated posts
       const posts = result.posts ?? [];
@@ -365,7 +380,7 @@ runtime.agent("social-content-repurposer")(async (ctx, input) => {
           contextLinks: contextUrls.length > 0 ? contextUrls : undefined,
           quantity: numPosts,
         },
-        graphConfig,
+        graphConfigFor(ctx, "repurpose_generate"),
       );
 
       const posts = result.posts ?? [];
