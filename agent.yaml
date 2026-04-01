@@ -2,12 +2,51 @@ name: social-content-repurposer
 language: typescript
 entrypoint: agent.ts
 browser: false
-run_timeout_minutes: 15
-inputs:
-  - id: content_url
-    label: Content URL
-    type: url
-    required: true
+run_timeout_minutes: 30
 tools:
   - twitter
   - linkedin
+
+inputs:
+  - key: mode
+    label: Mode
+    type: select
+    required: true
+    default: single_post
+    options:
+      - label: Single Post
+        value: single_post
+      - label: Campaign (3-5 posts)
+        value: campaign
+      - label: Twitter Thread
+        value: thread
+      - label: Content Curation
+        value: curate
+      - label: Repurpose Existing
+        value: repurpose
+
+  - key: content_url
+    label: Content URL
+    type: text
+    required: true
+    hint: URL of the article, blog post, or page to repurpose
+
+  - key: num_posts
+    label: Number of Posts
+    type: integer
+    required: false
+    default: 3
+    hint: For campaign/repurpose mode — how many posts to generate
+
+  - key: channels
+    label: Post To
+    type: text
+    required: false
+    default: "twitter,linkedin"
+    hint: Comma-separated — twitter, linkedin
+
+  - key: context_urls
+    label: Additional Context URLs
+    type: textarea
+    required: false
+    hint: For campaign/repurpose — extra URLs for context, comma-separated
