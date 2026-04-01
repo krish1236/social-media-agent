@@ -1,6 +1,7 @@
 import {
   END,
   LangGraphRunnableConfig,
+  MemorySaver,
   START,
   StateGraph,
 } from "@langchain/langgraph";
@@ -274,6 +275,8 @@ const generatePostBuilder = new StateGraph(
   // Always end after scheduling the post.
   .addEdge("schedulePost", END);
 
-export const generatePostGraph = generatePostBuilder.compile();
+export const generatePostGraph = generatePostBuilder.compile({
+  checkpointer: new MemorySaver(),
+});
 
 generatePostGraph.name = "Generate Post Subgraph";
