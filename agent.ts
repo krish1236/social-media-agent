@@ -154,14 +154,14 @@ async function postToSocials(
 async function postThread(
   ctx: any,
   tools: ToolsFacade,
-  posts: Array<{ content: string }>,
+  posts: Array<{ text: string }>,
 ) {
   // Twitter thread: post first tweet, reply to each subsequent
   await ctx.commitStep(
     "post_twitter_thread",
     async () => {
       await tools.twitter.postThread(
-        posts.map((p) => ({ text: p.content })),
+        posts.map((p) => ({ text: p.text })),
       );
     },
     {
@@ -169,13 +169,13 @@ async function postThread(
       preview: {
         type: "thread",
         tweets: posts.length,
-        first_tweet: posts[0]?.content.slice(0, 200),
+        first_tweet: posts[0]?.text.slice(0, 200),
       },
     },
   );
 
   // LinkedIn: post as single long-form (threads don't exist on LinkedIn)
-  const linkedInText = posts.map((p) => p.content).join("\n\n---\n\n");
+  const linkedInText = posts.map((p) => p.text).join("\n\n---\n\n");
   await ctx.commitStep(
     "post_linkedin_thread",
     async () => {
@@ -316,7 +316,7 @@ runtime.agent("social-content-repurposer")(async (ctx: any, input: any) => {
       await ctx.artifact("thread_plan.md", ctx.state.threadPlan, "text/markdown");
 
       const threadMarkdown = threadPosts
-        .map((p: any, i: number) => `### Tweet ${i + 1}\n\n${p.content}`)
+        .map((p: any, i: number) => `### Tweet ${i + 1}\n\n${p.text}`)
         .join("\n\n---\n\n");
       await ctx.artifact("thread_drafts.md", threadMarkdown, "text/markdown");
     });
