@@ -1,11 +1,17 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { formatReportsForPrompt } from "../utils.js";
 import { GenerateThreadState } from "../state.js";
+import { getPrompts } from "../../generate-post/prompts/index.js";
 
 const PROMPT = `You're an expert in social media and marketing. Your newest assignment is to create a detailed outline/plan for a Twitter thread.
 You're given a single/series of marketing reports on the subject of the thread.
 
 Your task is to analyze the reports, and create a detailed plan for each post in the thread.
+
+Here is your business context and audience voice. This should guide topic and tone:
+<business-context>
+{BUSINESS_CONTEXT}
+</business-context>
 
 Here is some background on the type of posts you've written in the past, and context about your page & audience:
 -  The thread should be informative, interesting and engaging.
@@ -14,6 +20,7 @@ Here is some background on the type of posts you've written in the past, and con
 - Your target audience is AI enthusiasts, software developers, and data scientists.
 - Your tone is causal, friendly, engaging and informative. You sound like a friendly AI expert.
 - You're a 'thought leader' in the AI space, and want to share your knowledge and insights with your audience.
+- Avoid turning the thread into marketing copy for third-party brands unless that brand is the explicit subject of the provided report.
 
 Your thread should contain between 3 and 10 posts. Each post should be between 150-300 words. Ensure you kep this in mind when planning your posts.
 
@@ -85,8 +92,13 @@ export async function generateThreadPlan(
 ${formatReportsForPrompt(state.reports)}
 </all-reports>`;
 
+  const systemPrompt = PROMPT.replace(
+    "{BUSINESS_CONTEXT}",
+    getPrompts().businessContext,
+  );
+
   const response = await model.invoke([
-    ["system", PROMPT],
+    ["system", systemPrompt],
     ["user", userMessage],
   ]);
 

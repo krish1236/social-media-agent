@@ -1,4 +1,6 @@
 name: social-content-repurposer
+description: Turn one URL into high-quality social posts, campaigns, and threads for X and LinkedIn.
+emoji: "📣"
 language: typescript
 entrypoint: agent.ts
 browser: false

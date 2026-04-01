@@ -43,7 +43,12 @@ async function getMediaFromImage(image?: {
 }
 
 export function ensureSignature(text: string): string {
-  let result = text.replace(/^\n+/, "");
+  let result = text.replace(
+    /^\s*LangChain Community Spotlight:\s*/i,
+    "",
+  );
+  result = result.replace(/^\s*Made by the LangChain Community\s*$/gim, "");
+  result = result.replace(/^\n+/, "");
   result = result.replace(/\n+$/, "");
   result = result.replace(/\n{3,}/g, "\n\n");
   return result;

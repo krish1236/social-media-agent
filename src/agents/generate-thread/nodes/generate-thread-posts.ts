@@ -7,11 +7,13 @@ import {
   parseTweetGeneration,
 } from "../utils.js";
 import { GenerateThreadState } from "../state.js";
+import { getPrompts } from "../../generate-post/prompts/index.js";
 
 const STYLE_RULES = `- Ensure it's engaging and interesting.
 - Keep it under 280 characters to fit in a single Tweet.
 - Avoid marketing jargon or language. Don't sound like a salesperson, AI, or corporate employee.
 - Do NOT use hashtags or emojis.
+- Each tweet in the thread MUST cover a different aspect. Never repeat content between tweets.
 - Avoid the following and similar phrases, and tactics to get clicks:
   - "let's jump into this 🧵"
   - "read more below"
@@ -84,6 +86,11 @@ Here is the introduction post you already wrote for the thread:
 {INTRODUCTION_POST}
 </introduction-post>
 
+Here is your business context and audience voice. Follow this closely so posts represent your brand instead of a third-party brand:
+<business-context>
+{BUSINESS_CONTEXT}
+</business-context>
+
 {BODY_POSTS}
 
 Here is the plan for the thread. Ensure you examine closely the plan for the post you're about to write, the post you wrote previously, and if applicable, the post you'll write next.
@@ -126,6 +133,11 @@ Here are all of the posts you've written so far:
 {THREAD_POSTS}
 </thread-posts>
 
+Here is your business context and audience voice. Follow this closely so posts represent your brand instead of a third-party brand:
+<business-context>
+{BUSINESS_CONTEXT}
+</business-context>
+
 You also wrote this plan for the thread. Ensure you examine the plan closely for the conclusion you're about to write, and all of the posts you wrote previously.
 This is important to keep the entire thread coherent and engaging:
 <thread-plan>
@@ -141,6 +153,10 @@ Now, follow these steps to create your tweet:
 5. Review your tweet to ensure it's under 280 characters and sounds like it was written by a human.
 
 Once you've completed these steps, provide your tweet inside <tweet> tags. Do not include any explanation or commentary outside of the tweet itself. ALWAYS WRAP your tweet inside opening and closing <tweet> tags.`;
+
+function normalizeTweet(tweet: string): string {
+  return tweet.replace(/\s+/g, " ").trim().toLowerCase();
+}
 
 export async function generateThreadPosts(
   state: GenerateThreadState,
@@ -160,6 +176,7 @@ export async function generateThreadPosts(
   const firstPost = parseTweetGeneration(firstPostGeneration.content as string);
 
   const bodyPosts: string[] = [];
+  const businessContext = getPrompts().businessContext;
 
   // Subtract 2 because we already have the first post, and we generate the final post at the end
   for (let i = 0; i < state.totalPosts - 2; i += 1) {
@@ -170,13 +187,31 @@ export async function generateThreadPosts(
       .replace("{TOTAL_POSTS}", state.totalPosts.toString())
       .replace("{INTRODUCTION_POST}", firstPost)
       .replace("{BODY_POSTS}", formatBodyPostsForPrompt(bodyPosts))
-      .replace("{THREAD_PLAN}", state.threadPlan);
+      .replace("{THREAD_PLAN}", state.threadPlan)
+      .replace("{BUSINESS_CONTEXT}", businessContext);
 
-    const bodyPost = (
-      await model.invoke([["user", formattedFollowingPostPrompt]])
-    ).content as string;
-
-    bodyPosts.push(parseTweetGeneration(bodyPost));
+    const existingPosts = [firstPost, ...bodyPosts];
+    let parsedBodyPost = "";
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const duplicateGuard =
+        attempt === 0
+          ? ""
+          : `\n\nIMPORTANT: Your previous output duplicated existing tweets. Rewrite tweet ${
+              i + 2
+            } so it is materially different in facts and angle from all prior tweets.\n<existing-tweets>\n${formatAllPostsForPrompt(existingPosts)}\n</existing-tweets>`;
+      const bodyPost = (
+        await model.invoke([["user", `${formattedFollowingPostPrompt}${duplicateGuard}`]])
+      ).content as string;
+      parsedBodyPost = parseTweetGeneration(bodyPost);
+      const normalizedCandidate = normalizeTweet(parsedBodyPost);
+      const hasExactDuplicate = existingPosts.some(
+        (p) => normalizeTweet(p) === normalizedCandidate,
+      );
+      if (!hasExactDuplicate) {
+        break;
+      }
+    }
+    bodyPosts.push(parsedBodyPost);
   }
 
   const formattedFinalPostPrompt = FINAL_POST_PROMPT.replace(
@@ -185,12 +220,20 @@ export async function generateThreadPosts(
   ).replace(
     "{THREAD_POSTS}",
     formatAllPostsForPrompt([firstPost, ...bodyPosts]),
-  );
+  ).replace("{BUSINESS_CONTEXT}", businessContext);
 
   const finalPostGeneration = await model.invoke([
     ["user", formattedFinalPostPrompt],
   ]);
-  const finalPost = parseTweetGeneration(finalPostGeneration.content as string);
+  let finalPost = parseTweetGeneration(finalPostGeneration.content as string);
+  const priorPosts = [firstPost, ...bodyPosts];
+  if (
+    priorPosts.some((p) => normalizeTweet(p) === normalizeTweet(finalPost))
+  ) {
+    const finalRetryPrompt = `${formattedFinalPostPrompt}\n\nIMPORTANT: The conclusion tweet must be unique and must not duplicate any prior tweet in the thread.`;
+    const finalRetryGeneration = await model.invoke([["user", finalRetryPrompt]]);
+    finalPost = parseTweetGeneration(finalRetryGeneration.content as string);
+  }
 
   const allPosts = [firstPost, ...bodyPosts, finalPost];
   return {

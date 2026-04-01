@@ -18,50 +18,96 @@ import { supervisorGraph } from "./src/agents/supervisor/supervisor-graph.js";
 
 const runtime = new AgentRuntime();
 
-// ── In-memory LangGraph store shim ──
+// ── LangGraph store adapter backed by RunForge ctx.storage ──
 type StoreItem = {
   namespace: string[];
   key: string;
   value: Record<string, unknown>;
 };
 
-class InMemoryStoreShim {
-  private readonly data = new Map<string, StoreItem>();
+type ProjectStorageLike = {
+  get(key: string): Promise<unknown | null>;
+  set(key: string, value: unknown): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(prefix?: string): Promise<string[]>;
+};
 
-  private toMapKey(namespace: string[], key: string): string {
-    return `${namespace.join("::")}@@${key}`;
+class RunForgeStoreAdapter {
+  constructor(private readonly storage: ProjectStorageLike) {}
+
+  private toStorageKey(namespace: string[], key: string): string {
+    return `${namespace.join("::")}::${key}`;
+  }
+
+  private fromStorageKey(storageKey: string): { namespace: string[]; key: string } {
+    const parts = storageKey.split("::");
+    if (parts.length <= 1) {
+      return { namespace: [], key: storageKey };
+    }
+    return {
+      namespace: parts.slice(0, -1),
+      key: parts[parts.length - 1],
+    };
   }
 
   async get(namespace: string[], key: string): Promise<StoreItem | null> {
-    return this.data.get(this.toMapKey(namespace, key)) ?? null;
+    const storageKey = this.toStorageKey(namespace, key);
+    const value = await this.storage.get(storageKey);
+    if (value == null || typeof value !== "object") {
+      return null;
+    }
+    return {
+      namespace,
+      key,
+      value: value as Record<string, unknown>,
+    };
   }
 
   async put(namespace: string[], key: string, value: Record<string, unknown>): Promise<void> {
-    this.data.set(this.toMapKey(namespace, key), { namespace, key, value });
+    const storageKey = this.toStorageKey(namespace, key);
+    await this.storage.set(storageKey, value);
   }
 
   async delete(namespace: string[], key: string): Promise<void> {
-    this.data.delete(this.toMapKey(namespace, key));
+    const storageKey = this.toStorageKey(namespace, key);
+    await this.storage.delete(storageKey);
   }
 
   async search(namespacePrefix: string[]): Promise<StoreItem[]> {
-    const prefix = `${namespacePrefix.join("::")}@@`;
-    return Array.from(this.data.entries())
-      .filter(([k]) => k.startsWith(prefix))
-      .map(([, v]) => v);
+    const storagePrefix = namespacePrefix.length
+      ? `${namespacePrefix.join("::")}::`
+      : "";
+    const keys = await this.storage.list(storagePrefix);
+    const items = await Promise.all(
+      keys.map(async (storageKey) => {
+        const parsed = this.fromStorageKey(storageKey);
+        const value = await this.storage.get(storageKey);
+        if (value == null || typeof value !== "object") {
+          return null;
+        }
+        return {
+          namespace: parsed.namespace,
+          key: parsed.key,
+          value: value as Record<string, unknown>,
+        } satisfies StoreItem;
+      }),
+    );
+    return items.filter((i): i is StoreItem => i !== null);
   }
 
   async listNamespaces(): Promise<string[][]> {
+    const keys = await this.storage.list("");
     const seen = new Set<string>();
-    const out: string[][] = [];
-    for (const item of this.data.values()) {
-      const key = item.namespace.join("::");
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(item.namespace);
+    const namespaces: string[][] = [];
+    for (const storageKey of keys) {
+      const parsed = this.fromStorageKey(storageKey);
+      const namespaceKey = parsed.namespace.join("::");
+      if (!seen.has(namespaceKey)) {
+        seen.add(namespaceKey);
+        namespaces.push(parsed.namespace);
       }
     }
-    return out;
+    return namespaces;
   }
 
   async batch(ops: any[]): Promise<any[]> {
@@ -88,31 +134,41 @@ class InMemoryStoreShim {
   }
 }
 
-const storeShim = new InMemoryStoreShim();
-
 // ── Shared graph config ──
 const baseGraphConfig = {
   configurable: {
-    SKIP_USED_URLS_CHECK: true,
+    SKIP_USED_URLS_CHECK: false,
     SKIP_CONTENT_RELEVANCY_CHECK: true,
-    skipUsedUrlsCheck: true,
+    skipUsedUrlsCheck: false,
     skipContentRelevancyCheck: true,
     textOnlyMode: true,
   },
-  store: storeShim as any,
 };
 
 function graphConfigFor(ctx: any, scope: string) {
   const runId =
     String(ctx?.run?.id ?? ctx?.runId ?? ctx?.inputs?.run_id ?? "").trim() ||
     `run_${Date.now()}`;
+  const store = new RunForgeStoreAdapter(ctx.storage as ProjectStorageLike);
   return {
     ...baseGraphConfig,
     configurable: {
       ...baseGraphConfig.configurable,
       thread_id: `${runId}:${scope}`,
     },
+    store: store as any,
   };
+}
+
+function requireEnvVarsForCurateMode(): void {
+  const required = ["PORT", "LANGGRAPH_API_URL", "LANGCHAIN_API_KEY"];
+  const missing = required.filter((name) => !String(process.env[name] ?? "").trim());
+  if (missing.length > 0) {
+    throw new Error(
+      `Curate mode requires missing environment variables: ${missing.join(", ")}. ` +
+        "Set these env vars and retry. Optional sources may use additional keys.",
+    );
+  }
 }
 
 // ── Helper: post via RunForge managed tools with approval ──
@@ -336,6 +392,8 @@ runtime.agent("social-content-repurposer")(async (ctx: any, input: any) => {
 
   // ── MODE 4: Content Curation (batch scan + generate) ──
   else if (mode === "curate") {
+    requireEnvVarsForCurateMode();
+
     await ctx.safeStep("curate_and_generate", async () => {
       const result = await supervisorGraph.invoke(
         {},

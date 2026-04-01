@@ -31,7 +31,7 @@ The following are rules to follow when determining whether or not to approve con
 </validation-rules>`;
 
 export const TWEET_EXAMPLES = `<example index="1">
-LangChain Community Spotlight: Podcastfy.ai 🎙️🤖
+Project Spotlight: Podcastfy.ai 🎙️🤖
 
 An Open Source API alternative to NotebookLM's podcast product
 
@@ -41,7 +41,7 @@ https://podcastfy.ai
 </example>
 
 <example index="2">
-LangChain Community Spotlight: Complex SQL Joins with LangGraph and Waii 🧱
+Project Spotlight: Complex SQL Joins with LangGraph and Waii 🧱
 
 Waii is a toolkit that provides text-to-SQL and text-to-chart capabilities
 
@@ -51,7 +51,7 @@ https://waii.com
 </example>
 
 <example index="3">
-LangChain Community Spotlight: Build agents that can interact with any website 🌐
+Project Spotlight: Build agents that can interact with any website 🌐
 
 Check out this video by @DendriteSystems showing how to build an agent that can interact with websites just like a human would!
 
@@ -66,7 +66,7 @@ This video demonstrates a workflow that:
 </example>
 
 <example index="4">
-LangChain Community Spotlight: RepoGPT 🚀
+Project Spotlight: RepoGPT 🚀
 
 RepoGPT is an open-source, AI-powered assistant
 
@@ -76,7 +76,7 @@ https://repogpt.com
 </example>
 
 <example index="5">
-LangChain Community Spotlight: AI Travel Agent ✈️
+Project Spotlight: AI Travel Agent ✈️
 
 This is one of the most comprehensive examples we've seen of a LangGraph agent. It's specifically designed to be a real world practical use case
 
@@ -93,7 +93,7 @@ export const POST_STRUCTURE_INSTRUCTIONS = `The post should have three main sect
 <structure-instructions>
 
 <section key="1">
-The first part of the post is the header. It MUST start with "LangChain Community Spotlight:" followed by the name of the content/project, and one to two emojis. The project name should be short and concise. If the marketing report does not specify a name, you should get creative and come up with a catchy title for it. Example format: "LangChain Community Spotlight: Project Name 🚀"
+The first part of the post is the header. It should start with a concise title for the content/project and one to two emojis. Do not use any fixed platform branding prefix. Example format: "Project Spotlight: Project Name 🚀"
 </section>
 
 <section key="2">
